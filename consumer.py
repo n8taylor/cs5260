@@ -2,6 +2,7 @@ import sys
 import boto3
 import json
 import time
+import logging
 
 def printHelpMessage():
     print("""
@@ -12,6 +13,7 @@ def printHelpMessage():
     """)
 
 def processInput():
+    logging.info("Processing user input")
     n = len(sys.argv)
     if n != 7:
         if (sys.argv[1] != "-test"):
@@ -22,8 +24,8 @@ def processInput():
         
     args = {
         "requestBin": "cs-5260-wizard-requests",
-        "storageType": "s3",
-        "storageName": "cs-5260-wizard-web"
+        "storageType": "dynamodb",
+        "storageName": "widgets1"
     }
 
     requestBinFlag = False
@@ -63,13 +65,13 @@ def createWidget(s3, db, request, args):
     # create widget object
     if args["storageType"] == "dynamodb":
         newWidget = {
-            "widgetId": request['widgetId'],
-            "owner": request['owner'],
-            "label": request['label'],
-            "description": request['description']
+            "id": {"S": request['widgetId']},
+            "owner": {"S": request['owner']},
+            "label": {"S": request['label']},
+            "description": {"S": request['description']}
         }
         for attribute in request['otherAttributes']:
-            newWidget[attribute['name']] = attribute['value']
+            newWidget[attribute['name']] = {"S": attribute['value']}
 
         db.put_item(
             TableName=args['storageName'],
@@ -93,7 +95,7 @@ def createWidget(s3, db, request, args):
 def updateWidget(s3, db, request, args):
     try:
         # retrieve widget currently in bucket
-        response = s3.get_object(Bucket="cs-5260-wizard-web", Key=f"widgets/{request['owner']}/{request['widgetId']}")
+        response = s3.get_object(Bucket=args['storageName'], Key=f"widgets/{request['owner']}/{request['widgetId']}")
         widget = json.loads(response['Body'].read())
 
         # collect updates from request
@@ -134,15 +136,22 @@ def deleteWidget(s3, db, request, args):
     except:
         print(f"Widget {request['widgetId']} does not exist.")
 
+def retrieveRequest(s3, args):
+    return s3.list_objects_v2(Bucket=args['requestBin'], MaxKeys=1)
+
+def deleteRequest(s3, key, args):
+    s3.delete_object(Bucket=args['requestBin'], Key=key)
+
 
 def consume(args):
     s3 = boto3.client('s3')
     db = boto3.client('dynamodb', region_name="us-east-1")
+
     timeout = 100
     while timeout > 0:
         # try:
             # retrieve the first request if any
-            response = s3.list_objects_v2(Bucket=args['requestBin'], MaxKeys=1)
+            response = retrieveRequest(s3, db, args)
 
             # if there are any requests
             if 'Contents' in response:
@@ -150,12 +159,16 @@ def consume(args):
                 timeout = 100
 
                 # get the request
-                key = response['Contents'][0]['Key']
-                response = s3.get_object(Bucket=args['requestBin'], Key=key)
-                request = json.loads(response['Body'].read())
-                print(request)
+                try:
+                    key = response['Contents'][0]['Key']
+                    response = s3.get_object(Bucket=args['requestBin'], Key=key)
+                    request = json.loads(response['Body'].read())
+                    print(request)
+                except:
+                    print(f"An error occured when retrieving request {key}")
 
                 # delete request
+                deleteRequest(s3, key, args)
 
                 # perform requested method on specified widget
                 method = request['type']
@@ -178,6 +191,7 @@ def consume(args):
         #     break
 
 def main():
+    logging.basicConfig(filename='consumer.log', encoding='utf-8', level=logging.INFO)
     args = processInput()
     consume(args)
 
