@@ -1,19 +1,12 @@
 import sys
 
-# total arguments
 n = len(sys.argv)
-
-# Arguments passed
-print("\nName of Python script:", sys.argv[0])
-
-print("\nArguments passed:", end = " ")
+if n != 7:
+    print("""
+Command-line arguments:
+        -rb             Name of bucket that will contain requests
+        -st             Type of request storage [s3, dyamodb]
+        -sn             Name of storage resource
+""")
 for i in range(1, n):
 	print(sys.argv[i], end = " ")
-	
-# Addition of numbers
-Sum = 0
-# Using argparse module
-for i in range(1, n):
-	Sum += int(sys.argv[i])
-	
-print("\n\nResult:", Sum)
