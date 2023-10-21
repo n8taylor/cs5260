@@ -18,14 +18,20 @@ def processInput():
     if n != 7:
         if (sys.argv[1] != "-test"):
             printHelpMessage()
-            return
+            return False
         
         # run test function
         
+    # args = {
+    #     "requestBin": "cs-5260-wizard-requests",
+    #     "storageType": "dynamodb",
+    #     "storageName": "widgets1"
+    # }
+
     args = {
-        "requestBin": "cs-5260-wizard-requests",
-        "storageType": "dynamodb",
-        "storageName": "widgets1"
+        "requestBin": None,
+        "storageType": None,
+        "storageName": None
     }
 
     requestBinFlag = False
@@ -33,18 +39,18 @@ def processInput():
     storageNameFlag = False
     for i in range(1, n):
         if requestBinFlag:
-            # args["requestBin"] = sys.argv[i]
+            args["requestBin"] = sys.argv[i]
             requestBinFlag = False
             continue
         if storageTypeFlag:
-            # if sys.argv[i] not in ['s3', 'dynamodb']:
-            #     printHelpMessage()
-            #     return
-            # args["storageType"] = sys.argv[i]
+            if sys.argv[i] not in ['s3', 'dynamodb']:
+                printHelpMessage()
+                return False
+            args["storageType"] = sys.argv[i]
             storageTypeFlag = False
             continue
         if storageNameFlag:
-            # args["storageName"] = sys.argv[i]
+            args["storageName"] = sys.argv[i]
             storageNameFlag = False
             continue
 
@@ -57,8 +63,11 @@ def processInput():
         else:
             print("Error: invalid arguments.")
             printHelpMessage()
-            return
+            return False
 
+    if None in args.values():
+        printHelpMessage()
+        return False
     return args
 
 def createWidget(s3, db, request, args):
@@ -73,70 +82,86 @@ def createWidget(s3, db, request, args):
         for attribute in request['otherAttributes']:
             newWidget[attribute['name']] = {"S": attribute['value']}
 
-        db.put_item(
-            TableName=args['storageName'],
-            Item=newWidget
-        )
+        try:
+            logging.info(f"Storing widget {newWidget['id']} in {args['storageName']}")
+            db.put_item(
+                TableName=args['storageName'],
+                Item=newWidget
+            )
+            logging.info(f"Successfully stored widget {newWidget['id']} in {args['storageName']}")
+        except:
+            logging.error(f"Could not store widget {newWidget['id']} in {args['storageName']}")
 
     elif args["storageType"] == "s3":
         newWidget = {key: val for key, val in request.items() if key != 'requestId' and key != 'type'}
-
-        print(newWidget)
+        print("new widget", newWidget)
 
         try:
+            logging.info(f"Storing widget {newWidget['widgetId']} in {args['storageName']}")
             s3.put_object(
                 Bucket=args['storageName'], 
                 Key=f"widgets/{newWidget['owner'].lower().replace(' ', '-')}/{newWidget['widgetId']}", 
                 Body=json.dumps(newWidget)
             )
+            logging.info(f"Successfully stored widget {newWidget['widgetId']} in {args['storageName']}")
         except:
-            print("An error occured when trying to store the widget.")
+            logging.error(f"Could not store widget {newWidget['widgetId']} in {args['storageName']}")
 
 def updateWidget(s3, db, request, args):
-    try:
-        # retrieve widget currently in bucket
-        response = s3.get_object(Bucket=args['storageName'], Key=f"widgets/{request['owner']}/{request['widgetId']}")
-        widget = json.loads(response['Body'].read())
-
-        # collect updates from request
-        updates = {
-            "label": request['label'],
-            "description": request['description']
-        }
-        for attribute in request['otherAttributes']:
-            updates[attribute['name']] = attribute['value']
-
-        # apply updates to the widget
-        for attribute in updates:
-            if updates[attribute] is not None:
-                if updates[attribute] == "":
-                    widget[attribute] = None
-                else:
-                    widget[attribute] = updates[attribute]
-
+    if args['storageType'] == 's3':
         try:
-            # update in bucket
-            s3.put_object(
+            logging.info(f"Checking for {request['widgetId']} in {args['storageName']}")
+            # retrieve widget currently in bucket
+            response = s3.get_object(
                 Bucket=args['storageName'], 
-                Key=f"widgets/{widget['owner'].lower().replace(' ', '-')}/{widget['widgetId']}", 
-                Body=json.dumps(widget)
+                Key=f"widgets/{request['owner'].lower().replace(' ', '-')}/{request['widgetId']}"
             )
+            widget = json.loads(response['Body'].read())
 
+            # collect updates from request
+            updates = {
+                "label": request['label'],
+                "description": request['description']
+            }
+            for attribute in request['otherAttributes']:
+                updates[attribute['name']] = attribute['value']
+
+            # apply updates to the widget
+            for attribute in updates:
+                if updates[attribute] is not None:
+                    if updates[attribute] == "":
+                        widget[attribute] = None
+                    else:
+                        widget[attribute] = updates[attribute]
+
+            try:
+                logging.info(f"Updating {widget['widgetId']} in {args['storageName']}")
+                # update in bucket
+                s3.put_object(
+                    Bucket=args['storageName'], 
+                    Key=f"widgets/{widget['owner'].lower().replace(' ', '-')}/{widget['widgetId']}", 
+                    Body=json.dumps(widget)
+                )
+                logging.info(f"Successfully updated {widget['widgetId']} in {args['storageName']}")
+
+            except:
+                logging.error(f"Could not update widget {widget['widgetId']}")
         except:
-            print("An error occured when trying to update the widget.")
-
-    except:
-        print(f"Widget {request['widgetId']} does not exist.")
+            logging.warning(f"Widget {request['widgetId']} does not exist.")
+    else:
+        logging.warning("Updates on DynamoDB widgets not yet implemented")
 
 def deleteWidget(s3, db, request, args):
+    logging.warning("Deleting widgets is not yet implemented")
     try:
         # retrieve widget currently in bucket
         response = s3.get_object(Bucket="cs-5260-wizard-web", Key=f"widgets/{request['owner']}/{request['widgetId']}")
         
     except:
-        print(f"Widget {request['widgetId']} does not exist.")
+        logging.warning(f"Widget {request['widgetId']} does not exist")
 
 def retrieveRequest(s3, args):
+    logging.info(f"Retrieving a request from {args['requestBin']}")
     return s3.list_objects_v2(Bucket=args['requestBin'], MaxKeys=1)
 
 def deleteRequest(s3, key, args):
@@ -149,9 +174,9 @@ def consume(args):
 
     timeout = 100
     while timeout > 0:
-        # try:
+        try:
             # retrieve the first request if any
-            response = retrieveRequest(s3, db, args)
+            response = retrieveRequest(s3, args)
 
             # if there are any requests
             if 'Contents' in response:
@@ -164,8 +189,9 @@ def consume(args):
                     response = s3.get_object(Bucket=args['requestBin'], Key=key)
                     request = json.loads(response['Body'].read())
                     print(request)
+                    logging.info(f"Request {key} found: {request['type']} {request['widgetId']}")
                 except:
-                    print(f"An error occured when retrieving request {key}")
+                    logging.error(f"Could not retrieve request {key}")
 
                 # delete request
                 deleteRequest(s3, key, args)
@@ -178,21 +204,20 @@ def consume(args):
                     updateWidget(s3, db, request, args)
                 elif method == "delete":
                     deleteWidget(s3, db, request, args)
-                    
-                break
 
             else:
-                print("No objects found in the bucket.")
+                logging.info("No requests found")
                 timeout -= 1
                 time.sleep(.1)
-                break
-        # except:
-        #     print("error")
-        #     break
+        except:
+            logging.error(f"Could not access requests from {args['requestBin']}")
+            break
 
 def main():
     logging.basicConfig(filename='consumer.log', encoding='utf-8', level=logging.INFO)
     args = processInput()
+    if not args:
+        return
     consume(args)
 
 
