@@ -52,49 +52,80 @@ def consume(args):
     s3 = boto3.client('s3')
     timeout = 100
     while timeout > 0:
-        try:
+        # try:
             bucket_name = 'cs-5260-wizard-requests'
-
-            # List objects in the bucket
+            # retrieve the first request if any
             response = s3.list_objects_v2(Bucket=bucket_name, MaxKeys=1)
 
-            # Check if objects were found in the bucket
+            # if there are any requests
             if 'Contents' in response:
+                # reset timeout
                 timeout = 100
-                objects = response['Contents']
-                key = objects[0]['Key']
-                # Find the object with the smallest key (object key is a string)
-                # smallest_object = min(objects, key=lambda x: x['Key'])
 
-                # Retrieve the content of the smallest object
-                # smallest_object_key = smallest_object['Key']
+                # get the request
+                key = response['Contents'][0]['Key']
                 response = s3.get_object(Bucket=bucket_name, Key=key)
-                # print(response)
                 request = json.loads(response['Body'].read())
-                print(request)
-                print(json.loads(request))
-                # break
 
-                # Now 'content' contains the data from the smallest object in the bucket
+                method = request['type']
+
+                if method == "create":
+                    # create widget object
+                    newWidget = {
+                        "widgetId": request['widgetId'],
+                        "owner": request['owner'],
+                        "label": request['label'],
+                        "description": request['description']
+                    }
+                    for attribute in request['otherAttributes']:
+                        newWidget[attribute['name']] = attribute['value']
+
+                    print(newWidget)
+
+                    s3.put_object(Bucket="cs-5260-wizard-web", Key=f"widgets/{newWidget['owner']}/{newWidget['widgetId']}", Body=json.dumps(newWidget))
+
+                elif method == "update":
+                    try:
+                        # retrieve widget currently in bucket
+                        response = s3.get_object(Bucket="cs-5260-wizard-web", Key=f"widgets/{request['owner']}/{request['widgetId']}")
+                        widget = json.loads(response['Body'].read())
+
+                        # collect updates from request
+                        updates = {
+                            "label": request['label'],
+                            "description": request['description']
+                        }
+                        for attribute in request['otherAttributes']:
+                            newWidget[attribute['name']] = attribute['value']
+
+                        # apply updates to the widget
+                        toRemove = []
+                        for attribute in updates:
+                            if updates[attribute] is not None:
+                                if updates[attribute] == "":
+                                    toRemove.append(attribute)
+                                else:
+                                    widget[attribute] = updates[attribute]
+                        for attribute in toRemove:
+                            widget.pop(attribute)
+
+                        # update in bucket
+                        s3.put_object(Bucket="cs-5260-wizard-web", Key=f"widgets/{widget['owner']}/{widget['widgetId']}", Body=json.dumps(widget))
+
+                    except:
+                        print(f"Widget {request['widgetId']} does not exist.")
+
+                    
+                break
+
             else:
                 print("No objects found in the bucket.")
                 timeout -= 1
                 time.sleep(.1)
-                # break
-        except:
-            print("error")
-            # break
-    # print(s3.list_buckets())
-
-
-    # Loop until some stop condition met
-    #     Try to get request
-    #     If got request
-    #         Process request
-    #     Else
-    #         Wait a while (100ms)
-    # End loop
-    # pass
+                break
+        # except:
+        #     print("error")
+        #     break
 
 def main():
     args = processInput()
