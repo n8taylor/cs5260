@@ -115,17 +115,18 @@ class Consumer():
         return self.s3.list_objects_v2(Bucket=self.args['queueName'], MaxKeys=1)
 
     def retrieveRequests(self):
+        # retrieve 10 requests from sqs and store them in self.requests
         pass
 
     def deleteRequest(self, key):
         self.s3.delete_object(Bucket=self.args['queueName'], Key=key)
 
     def consume(self):
-        timeout = 100
-        while timeout > 0:
-            try:
-                # check whether s3 or sqs is being used for the requests
-                if not self.sqs:
+        # check whether s3 or sqs is being used for the requests
+        if not self.sqs:
+            timeout = 100
+            while timeout > 0:
+                try:
                     # retrieve the first request if any
                     response = self.retrieveRequest()
 
@@ -160,13 +161,21 @@ class Consumer():
                         logging.info("No requests found")
                         timeout -= 1
                         time.sleep(.1)
-                else:
-                    # query sqs
-                    self.retrieveRequests()
 
-            except:
-                logging.error(f"Could not access requests from {self.args['queueName']}")
-                break
+                except:
+                    logging.error(f"Could not access requests from {self.args['queueName']}")
+                    break
+        else:
+            timeout = 20
+            while timeout > 0:
+                try:
+                    # query sqs and requests will be added to self.requests
+                    self.retrieveRequests()
+                    while len(self.requests) > 0:
+                        #process requests
+                        pass
+                except:
+                    logging.error(f"Could not access requests from {self.args['queueName']}")
 
     
 
