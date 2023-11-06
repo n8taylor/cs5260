@@ -7,7 +7,8 @@ import logging
 def printHelpMessage():
     print("""
     Command-line arguments:
-            -rb             Name of bucket that will contain requests
+            -qt             Type of request queue [s3, sqs]
+            -qn             Name of queue resource
             -st             Type of request storage [s3, dyamodb]
             -sn             Name of storage resource
     """)
@@ -23,24 +24,34 @@ def processInput():
         # run test function
         
     # args = {
-    #     "requestBin": "cs-5260-wizard-requests",
+    #     "queueType": "s3"
+    #     "queueName": "cs-5260-wizard-requests",
     #     "storageType": "dynamodb",
     #     "storageName": "widgets1"
     # }
 
     args = {
-        "requestBin": None,
+        "queueType": None,
+        "queueName": None,
         "storageType": None,
         "storageName": None
     }
 
-    requestBinFlag = False
+    queueTypeFlag = False
+    queueNameFlag = False
     storageTypeFlag = False
     storageNameFlag = False
     for i in range(1, n):
-        if requestBinFlag:
-            args["requestBin"] = sys.argv[i]
-            requestBinFlag = False
+        if queueTypeFlag:
+            if sys.argv[i] not in ['s3', 'sqs']:
+                printHelpMessage()
+                return False
+            args["storageType"] = sys.argv[i]
+            storageTypeFlag = False
+            continue
+        if queueNameFlag:
+            args["queueName"] = sys.argv[i]
+            queueNameFlag = False
             continue
         if storageTypeFlag:
             if sys.argv[i] not in ['s3', 'dynamodb']:
@@ -54,8 +65,10 @@ def processInput():
             storageNameFlag = False
             continue
 
-        if sys.argv[i] == "-rb":
-            requestBinFlag = True
+        if sys.argv[i] == "-qt":
+            queueTypeFlag = True
+        elif sys.argv[i] == "-qn":
+            queueNameFlag = True
         elif sys.argv[i] == "-st":
             storageTypeFlag = True
         elif sys.argv[i] == "-sn":
@@ -161,15 +174,16 @@ def deleteWidget(s3, db, request, args):
         logging.warning(f"Widget {request['widgetId']} does not exist")
 
 def retrieveRequest(s3, args):
-    logging.info(f"Retrieving a request from {args['requestBin']}")
-    return s3.list_objects_v2(Bucket=args['requestBin'], MaxKeys=1)
+    logging.info(f"Retrieving a request from {args['queueName']}")
+    return s3.list_objects_v2(Bucket=args['queueName'], MaxKeys=1)
 
 def deleteRequest(s3, key, args):
-    s3.delete_object(Bucket=args['requestBin'], Key=key)
+    s3.delete_object(Bucket=args['queueName'], Key=key)
 
 
 def consume(args):
     s3 = boto3.client('s3')
+    sqs = boto3.client('sqs')
     db = boto3.client('dynamodb', region_name="us-east-1")
 
     timeout = 100
@@ -186,7 +200,7 @@ def consume(args):
                 # get the request
                 try:
                     key = response['Contents'][0]['Key']
-                    response = s3.get_object(Bucket=args['requestBin'], Key=key)
+                    response = s3.get_object(Bucket=args['queueName'], Key=key)
                     request = json.loads(response['Body'].read())
                     print(request)
                     logging.info(f"Request {key} found: {request['type']} {request['widgetId']}")
@@ -210,7 +224,7 @@ def consume(args):
                 timeout -= 1
                 time.sleep(.1)
         except:
-            logging.error(f"Could not access requests from {args['requestBin']}")
+            logging.error(f"Could not access requests from {args['queueName']}")
             break
 
 def main():
