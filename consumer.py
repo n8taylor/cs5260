@@ -5,7 +5,8 @@ import time
 import logging
 
 # Received message: {"type":"create","requestId":"0f58856e-0270-4ba6-8452-6c64c55ae1e1","widgetId":"6e967ef9-531c-47a5-8ea5-4608b1b33c95","owner":"John Jones","label":"OUWAOIVIA","description":"JVVUWJYZCOYCPPOZNN","otherAttributes":[{"name":"color","value":"red"},{"name":"size-unit","value":"cm"},{"name":"width-unit","value":"cm"},{"name":"length-unit","value":"cm"},{"name":"rating","value":"1.4744097"},{"name":"quantity","value":"67"}]}
-
+# {'type': 'update', 'requestId': '2ef3c94f-90b3-4f69-b1a8-0f0193b6c0b4', 'widgetId': 'fb335d4a-6315-4fe1-afdc-c36e36241f70', 'owner': 'Henry Hops', 'description': 'MTIRLAOMNOKJSDIJYQXXNIEHAJDYIQGWGIOVWECTRUVFBFESZLDDZYAHTLJ', 'otherAttributes': [{'name': 'size', 'value': '439'}, {'name': 'size-unit', 'value': 'cm'}, {'name': 'height', 'value': '901'}, {'name': 'height-unit', 'value': 'cm'}, {'name': 'width', 'value': '111'}, {'name': 'width-unit', 'value': 'cm'}, {'name': 'length', 'value': '861'}, {'name': 'length-unit', 'value': 'cm'}, {'name': 'rating', 'value': '1.0228002'}, {'name': 'price', 'value': '49.47'}, {'name': 'quantity', 'value': '293'}]}
+# {'type': 'delete', 'requestId': 'b22abdca-8003-455e-ab23-6c367e8cd50a', 'widgetId': 'f74ced61-26c7-4780-b494-9cfafaffb6b0', 'owner': 'John Jones'}
 
 class Consumer():
     def __init__(self, args):
@@ -18,7 +19,7 @@ class Consumer():
             self.s3 = boto3.client('s3')
         if 'sqs' in args.values():
             self.sqs = boto3.client('sqs', region_name="us-east-1")
-        if 'db' in args.values():
+        if 'dynamodb' in args.values():
             self.db = boto3.client('dynamodb', region_name="us-east-1")
         # cache requests if using sqs
         self.requests = []
@@ -34,6 +35,7 @@ class Consumer():
             }
             for attribute in request['otherAttributes']:
                 newWidget[attribute['name']] = {"S": attribute['value']}
+            # print(f'storing {newWidget}')
 
             try:
                 logging.info(f"Storing widget {newWidget['id']} in {self.args['storageName']}")
@@ -47,7 +49,7 @@ class Consumer():
 
         elif self.args["storageType"] == "s3":
             newWidget = {key: val for key, val in request.items() if key != 'requestId' and key != 'type'}
-            print("new widget", newWidget)
+            # print("new widget", newWidget)
 
             try:
                 logging.info(f"Storing widget {newWidget['widgetId']} in {self.args['storageName']}")
@@ -101,8 +103,81 @@ class Consumer():
                     logging.error(f"Could not update widget {widget['widgetId']}")
             except:
                 logging.warning(f"Widget {request['widgetId']} does not exist.")
-        else:
-            logging.warning("Updates on DynamoDB widgets not yet implemented")
+
+        elif self.args['storageType'] == 'dynamodb':
+            logging.info(f"Checking for {request['widgetId']} in {self.args['storageName']}")
+            response = self.db.get_item(
+                TableName=self.args['storageName'],
+                Key={'id': {'S': request['widgetId']}}
+            )
+            item = response.get('Item')
+            print(f'\nitem {item}')
+            # print(item['owner'].values())
+            if item and (request['owner'] in item['owner'].values()):
+                # create updated widget
+                expressionAttributeNames = None
+                updateExpression = "SET label = :label, description = :description"
+                print('\n a;lsdkfj\n')
+                newWidget = {}
+                if 'label' in request.keys():
+                    newWidget[':label'] = {'S': request['label']}
+                if 'description' in request.keys():
+                    newWidget[":description"] = {'S': request['description']}
+                for attribute in request['otherAttributes']:
+                    if attribute['value'] is not None:
+                        if '-' in attribute['name']:
+                            expressionAttributeNames[f'#{attribute["name"].replace("-", "")}'] = attribute['name']
+                            updateExpression += f', #{attribute["name"].replace("-", "")} = :{attribute["name"].replace("-", "")}'
+                        else:
+                            updateExpression += f', {attribute["name"]} = :{attribute["name"].replace("-", "")}'
+                            
+                        if attribute['value'] == '':
+                            newWidget[f":{attribute['name'].replace('-', '')}"] = {"S": None}
+                        else:
+                            newWidget[f":{attribute['name'].replace('-', '')}"] = {"S": attribute['value']}
+
+                print(f'made new widget {newWidget}')
+                # create update expression
+                for attribute in newWidget:
+                    if attribute not in ['label', 'description']:
+                        if '-' not in attribute:
+                            updateExpression += f", {attribute} = {attribute}"
+                        else:
+                            expressionAttributeNames[f'#{attribute.replace("-", "")}'] = attribute
+                print(f'made update expression\n{updateExpression}')
+                try:
+                    logging.info(f"Updating {request['widgetId']} in {self.args['storageName']}")
+                    # Update the item in the DynamoDB table
+                    print()
+                    print(newWidget)
+                    if not expressionAttributeNames:
+                        response = self.db.update_item(
+                            TableName=self.args['storageName'],
+                            # Key=request['widgetId'],
+                            Key={'id': {'S': request['widgetId']}},
+                            UpdateExpression=updateExpression,
+                            ExpressionAttributeValues=newWidget,
+                            ReturnValues='ALL_NEW'
+                        )
+                    else:
+                        response = self.db.update_item(
+                            TableName=self.args['storageName'],
+                            # Key=request['widgetId'],
+                            Key={'id': {'S': request['widgetId']}},
+                            UpdateExpression=updateExpression,
+                            expressionAttributeNames=expressionAttributeNames,
+                            ExpressionAttributeValues=newWidget,
+                            ReturnValues='ALL_NEW'
+                        )
+
+                    print(response)
+                    logging.info(f"Successfully updated {widget['widgetId']} in {self.args['storageName']}")
+                except Exception as e:
+                    logging.error(f"Failed to update widget {request['widgetId']}")
+                    print(e)
+            else:
+                logging.warning(f"Widget {request['widgetId']} with owner {request['owner']} does not exist")
+            
 
     def deleteWidget(self, request):
         logging.warning("Deleting widgets is not yet implemented")
@@ -119,36 +194,24 @@ class Consumer():
 
     def retrieveRequests(self):
         logging.info(f"Retrieving a request from {self.args['queueName']}")
-        # retrieve 10 requests from sqs and store them in self.requests
-        try:
-            # Get the queue URL using the queue name
-            response = self.sqs.get_queue_url(QueueName=self.args['queueName'])
-            # Extract the queue URL from the response
-            queueUrl = response['QueueUrl']
 
-            response = self.sqs.receive_message(
-                QueueUrl=queueUrl,
-                AttributeNames=['All'],
-                MessageAttributeNames=['All'],
-                MaxNumberOfMessages=10,
-                WaitTimeSeconds=10
-            )
+        # Get the queue URL using the queue name
+        response = self.sqs.get_queue_url(QueueName=self.args['queueName'])
+        # Extract the queue URL from the response
+        queueUrl = response['QueueUrl']
 
-            messages = response.get('Messages', [])
+        response = self.sqs.receive_message(
+            QueueUrl=queueUrl,
+            AttributeNames=['All'],
+            MessageAttributeNames=['All'],
+            MaxNumberOfMessages=10,
+            WaitTimeSeconds=10
+        )
 
-            for message in messages:
-                self.requests.append(message)
+        messages = response.get('Messages', [])
 
-            # for message in messages:
-            #     # Process the message
-            #     print(f"Received message: {message['Body']}")
-
-            #     # Delete the message from the queue after processing
-            #     # receipt_handle = message['ReceiptHandle']
-            #     # self.sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
-        except:
-            pass
-        pass
+        for message in messages:
+            self.requests.append(message)
 
     def deleteRequestFromS3(self, key):
         self.s3.delete_object(Bucket=self.args['queueName'], Key=key)
@@ -181,7 +244,7 @@ class Consumer():
                             key = response['Contents'][0]['Key']
                             response = self.s3.get_object(Bucket=self.args['queueName'], Key=key)
                             request = json.loads(response['Body'].read())
-                            print(request)
+                            # print(request)
                             logging.info(f"Request {key} found: {request['type']} {request['widgetId']}")
                         except:
                             logging.error(f"Could not retrieve request {key}")
@@ -194,8 +257,10 @@ class Consumer():
                         if method == "create":
                             self.createWidget(request)
                         elif method == "update":
+                            print(request)
                             self.updateWidget(request)
                         elif method == "delete":
+                            print(request)
                             self.deleteWidget(request)
 
                     else:
@@ -210,7 +275,6 @@ class Consumer():
             timeout = 6
             while timeout > 0:
                 try:
-                    # query sqs and requests will be added to self.requests
                     self.retrieveRequests()
 
                     if len(self.requests) == 0:
@@ -223,7 +287,6 @@ class Consumer():
                             print(type(self.requests[i]))
                             print(self.requests[i])
                             request = json.loads(self.requests[i]['Body'])
-                            # request = self.requests[i]['Body']
                             print(type(request))
                             print(request['requestId'])
                             logging.info(f"Request {request['requestId']} found: {request['type']} {request['widgetId']}")
@@ -241,8 +304,9 @@ class Consumer():
                             self.deleteRequestFromSqs(self.requests[i])
                         # break
                         self.requests = []
-                except:
+                except Exception as e:
                     logging.error(f"Could not access requests from {self.args['queueName']}")
+                    print(e)
                     break
 
     
