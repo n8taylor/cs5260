@@ -4,6 +4,9 @@ import json
 import time
 import logging
 
+# Received message: {"type":"create","requestId":"0f58856e-0270-4ba6-8452-6c64c55ae1e1","widgetId":"6e967ef9-531c-47a5-8ea5-4608b1b33c95","owner":"John Jones","label":"OUWAOIVIA","description":"JVVUWJYZCOYCPPOZNN","otherAttributes":[{"name":"color","value":"red"},{"name":"size-unit","value":"cm"},{"name":"width-unit","value":"cm"},{"name":"length-unit","value":"cm"},{"name":"rating","value":"1.4744097"},{"name":"quantity","value":"67"}]}
+
+
 class Consumer():
     def __init__(self, args):
         self.args = args
@@ -11,11 +14,11 @@ class Consumer():
         self.s3 = None
         self.sqs = None
         self.db = None
-        if 's3' in args.values:
+        if 's3' in args.values():
             self.s3 = boto3.client('s3')
-        if 'sqs' in args.values:
-            self.sqs = boto3.client('sqs')
-        if 'db' in args.values:
+        if 'sqs' in args.values():
+            self.sqs = boto3.client('sqs', region_name="us-east-1")
+        if 'db' in args.values():
             self.db = boto3.client('dynamodb', region_name="us-east-1")
         # cache requests if using sqs
         self.requests = []
@@ -115,11 +118,49 @@ class Consumer():
         return self.s3.list_objects_v2(Bucket=self.args['queueName'], MaxKeys=1)
 
     def retrieveRequests(self):
+        logging.info(f"Retrieving a request from {self.args['queueName']}")
         # retrieve 10 requests from sqs and store them in self.requests
+        try:
+            # Get the queue URL using the queue name
+            response = self.sqs.get_queue_url(QueueName=self.args['queueName'])
+            # Extract the queue URL from the response
+            queueUrl = response['QueueUrl']
+
+            response = self.sqs.receive_message(
+                QueueUrl=queueUrl,
+                AttributeNames=['All'],
+                MessageAttributeNames=['All'],
+                MaxNumberOfMessages=10,
+                WaitTimeSeconds=10
+            )
+
+            messages = response.get('Messages', [])
+
+            for message in messages:
+                self.requests.append(message)
+
+            # for message in messages:
+            #     # Process the message
+            #     print(f"Received message: {message['Body']}")
+
+            #     # Delete the message from the queue after processing
+            #     # receipt_handle = message['ReceiptHandle']
+            #     # self.sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+        except:
+            pass
         pass
 
-    def deleteRequest(self, key):
+    def deleteRequestFromS3(self, key):
         self.s3.delete_object(Bucket=self.args['queueName'], Key=key)
+
+    def deleteRequestFromSqs(self, request):
+        # Get the queue URL using the queue name
+        response = self.sqs.get_queue_url(QueueName=self.args['queueName'])
+        # Extract the queue URL from the response
+        queueUrl = response['QueueUrl']
+
+        receipt_handle = request['ReceiptHandle']
+        self.sqs.delete_message(QueueUrl=queueUrl, ReceiptHandle=receipt_handle)
 
     def consume(self):
         # check whether s3 or sqs is being used for the requests
@@ -146,7 +187,7 @@ class Consumer():
                             logging.error(f"Could not retrieve request {key}")
 
                         # delete request
-                        self.deleteRequest(key)
+                        self.deleteRequestFromS3(key)
 
                         # perform requested method on specified widget
                         method = request['type']
@@ -166,16 +207,43 @@ class Consumer():
                     logging.error(f"Could not access requests from {self.args['queueName']}")
                     break
         else:
-            timeout = 20
+            timeout = 6
             while timeout > 0:
                 try:
                     # query sqs and requests will be added to self.requests
                     self.retrieveRequests()
-                    while len(self.requests) > 0:
-                        #process requests
-                        pass
+
+                    if len(self.requests) == 0:
+                        logging.info("No requests found")
+                        timeout -= 1
+                    else:
+                        timeout = 6
+
+                        for i in range(len(self.requests)):
+                            print(type(self.requests[i]))
+                            print(self.requests[i])
+                            request = json.loads(self.requests[i]['Body'])
+                            # request = self.requests[i]['Body']
+                            print(type(request))
+                            print(request['requestId'])
+                            logging.info(f"Request {request['requestId']} found: {request['type']} {request['widgetId']}")
+
+                            # perform requested method on specified widget
+                            method = request['type']
+                            if method == "create":
+                                self.createWidget(request)
+                            elif method == "update":
+                                self.updateWidget(request)
+                            elif method == "delete":
+                                self.deleteWidget(request)
+
+                            # Delete the message from the queue after processing
+                            self.deleteRequestFromSqs(self.requests[i])
+                        # break
+                        self.requests = []
                 except:
                     logging.error(f"Could not access requests from {self.args['queueName']}")
+                    break
 
     
 
@@ -191,7 +259,7 @@ def printHelpMessage():
 def processInput():
     logging.info("Processing user input")
     n = len(sys.argv)
-    if n != 7:
+    if n != 9:
         if (sys.argv[1] != "-test"):
             printHelpMessage()
             return False
@@ -221,8 +289,8 @@ def processInput():
             if sys.argv[i] not in ['s3', 'sqs']:
                 printHelpMessage()
                 return False
-            args["storageType"] = sys.argv[i]
-            storageTypeFlag = False
+            args["queueType"] = sys.argv[i]
+            queueTypeFlag = False
             continue
         if queueNameFlag:
             args["queueName"] = sys.argv[i]
