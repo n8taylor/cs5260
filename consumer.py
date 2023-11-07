@@ -4,9 +4,6 @@ import json
 import time
 import logging
 
-# Received message: {"type":"create","requestId":"0f58856e-0270-4ba6-8452-6c64c55ae1e1","widgetId":"6e967ef9-531c-47a5-8ea5-4608b1b33c95","owner":"John Jones","label":"OUWAOIVIA","description":"JVVUWJYZCOYCPPOZNN","otherAttributes":[{"name":"color","value":"red"},{"name":"size-unit","value":"cm"},{"name":"width-unit","value":"cm"},{"name":"length-unit","value":"cm"},{"name":"rating","value":"1.4744097"},{"name":"quantity","value":"67"}]}
-# {'type': 'update', 'requestId': '2ef3c94f-90b3-4f69-b1a8-0f0193b6c0b4', 'widgetId': 'fb335d4a-6315-4fe1-afdc-c36e36241f70', 'owner': 'Henry Hops', 'description': 'MTIRLAOMNOKJSDIJYQXXNIEHAJDYIQGWGIOVWECTRUVFBFESZLDDZYAHTLJ', 'otherAttributes': [{'name': 'size', 'value': '439'}, {'name': 'size-unit', 'value': 'cm'}, {'name': 'height', 'value': '901'}, {'name': 'height-unit', 'value': 'cm'}, {'name': 'width', 'value': '111'}, {'name': 'width-unit', 'value': 'cm'}, {'name': 'length', 'value': '861'}, {'name': 'length-unit', 'value': 'cm'}, {'name': 'rating', 'value': '1.0228002'}, {'name': 'price', 'value': '49.47'}, {'name': 'quantity', 'value': '293'}]}
-# {'type': 'delete', 'requestId': 'b22abdca-8003-455e-ab23-6c367e8cd50a', 'widgetId': 'f74ced61-26c7-4780-b494-9cfafaffb6b0', 'owner': 'John Jones'}
 
 class Consumer():
     def __init__(self, args):
@@ -35,7 +32,6 @@ class Consumer():
             }
             for attribute in request['otherAttributes']:
                 newWidget[attribute['name']] = {"S": attribute['value']}
-            # print(f'storing {newWidget}')
 
             try:
                 logging.info(f"Storing widget {newWidget['id']} in {self.args['storageName']}")
@@ -49,7 +45,6 @@ class Consumer():
 
         elif self.args["storageType"] == "s3":
             newWidget = {key: val for key, val in request.items() if key != 'requestId' and key != 'type'}
-            # print("new widget", newWidget)
 
             try:
                 logging.info(f"Storing widget {newWidget['widgetId']} in {self.args['storageName']}")
@@ -111,46 +106,38 @@ class Consumer():
                 Key={'id': {'S': request['widgetId']}}
             )
             item = response.get('Item')
-            print(f'\nitem {item}')
-            # print(item['owner'].values())
+
             if item and (request['owner'] in item['owner'].values()):
                 # create updated widget
-                expressionAttributeNames = None
-                updateExpression = "SET label = :label, description = :description"
-                print('\n a;lsdkfj\n')
+                expressionAttributeNames = {}
+                updateExpression = "SET "
                 newWidget = {}
                 if 'label' in request.keys():
                     newWidget[':label'] = {'S': request['label']}
+                    updateExpression += f'label = :label'
                 if 'description' in request.keys():
                     newWidget[":description"] = {'S': request['description']}
+                    if 'label' in request.keys():
+                        updateExpression += f', description = :description'
+                    else:
+                        updateExpression += f'description = :description'
                 for attribute in request['otherAttributes']:
                     if attribute['value'] is not None:
+                        expressionAttributeNames[f'#{attribute["name"].replace("-", "")}'] = attribute['name']
                         if '-' in attribute['name']:
-                            expressionAttributeNames[f'#{attribute["name"].replace("-", "")}'] = attribute['name']
                             updateExpression += f', #{attribute["name"].replace("-", "")} = :{attribute["name"].replace("-", "")}'
                         else:
-                            updateExpression += f', {attribute["name"]} = :{attribute["name"].replace("-", "")}'
+                            updateExpression += f', #{attribute["name"]} = :{attribute["name"].replace("-", "")}'
                             
                         if attribute['value'] == '':
                             newWidget[f":{attribute['name'].replace('-', '')}"] = {"S": None}
                         else:
                             newWidget[f":{attribute['name'].replace('-', '')}"] = {"S": attribute['value']}
 
-                print(f'made new widget {newWidget}')
-                # create update expression
-                for attribute in newWidget:
-                    if attribute not in ['label', 'description']:
-                        if '-' not in attribute:
-                            updateExpression += f", {attribute} = {attribute}"
-                        else:
-                            expressionAttributeNames[f'#{attribute.replace("-", "")}'] = attribute
-                print(f'made update expression\n{updateExpression}')
                 try:
                     logging.info(f"Updating {request['widgetId']} in {self.args['storageName']}")
                     # Update the item in the DynamoDB table
-                    print()
-                    print(newWidget)
-                    if not expressionAttributeNames:
+                    if len(expressionAttributeNames.keys()) == 0:
                         response = self.db.update_item(
                             TableName=self.args['storageName'],
                             # Key=request['widgetId'],
@@ -165,16 +152,14 @@ class Consumer():
                             # Key=request['widgetId'],
                             Key={'id': {'S': request['widgetId']}},
                             UpdateExpression=updateExpression,
-                            expressionAttributeNames=expressionAttributeNames,
+                            ExpressionAttributeNames=expressionAttributeNames,
                             ExpressionAttributeValues=newWidget,
                             ReturnValues='ALL_NEW'
                         )
 
-                    print(response)
-                    logging.info(f"Successfully updated {widget['widgetId']} in {self.args['storageName']}")
+                    logging.info(f"Successfully updated {request['widgetId']} in {self.args['storageName']}")
                 except Exception as e:
                     logging.error(f"Failed to update widget {request['widgetId']}")
-                    print(e)
             else:
                 logging.warning(f"Widget {request['widgetId']} with owner {request['owner']} does not exist")
             
@@ -257,10 +242,8 @@ class Consumer():
                         if method == "create":
                             self.createWidget(request)
                         elif method == "update":
-                            print(request)
                             self.updateWidget(request)
                         elif method == "delete":
-                            print(request)
                             self.deleteWidget(request)
 
                     else:
@@ -284,11 +267,7 @@ class Consumer():
                         timeout = 6
 
                         for i in range(len(self.requests)):
-                            print(type(self.requests[i]))
-                            print(self.requests[i])
                             request = json.loads(self.requests[i]['Body'])
-                            print(type(request))
-                            print(request['requestId'])
                             logging.info(f"Request {request['requestId']} found: {request['type']} {request['widgetId']}")
 
                             # perform requested method on specified widget
@@ -306,7 +285,6 @@ class Consumer():
                         self.requests = []
                 except Exception as e:
                     logging.error(f"Could not access requests from {self.args['queueName']}")
-                    print(e)
                     break
 
     
@@ -392,7 +370,8 @@ def processInput():
 
 
 def main():
-    logging.basicConfig(filename='consumer.log', encoding='utf-8', level=logging.INFO)
+    # logging.basicConfig(filename='consumer.log', encoding='utf-8', level=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
     args = processInput()
     if not args:
         return
