@@ -163,9 +163,29 @@ class Consumer():
             else:
                 logging.warning(f"Widget {request['widgetId']} with owner {request['owner']} does not exist")
             
-
     def deleteWidget(self, request):
         logging.warning("Deleting widgets is not yet implemented")
+        if self.args['storageType'] == 's3':
+            try:
+                logging.info(f"Deleting {request['widgetId']} from {self.args['storageName']}")
+                self.s3.delete_object(
+                    Bucket=self.args['storageName'],
+                    Key=request['widgetId']
+                )
+                
+            except:
+                logging.error(f"Failed to delete widget {request['widgetId']}.")
+        elif self.args['storageType'] == 'dynamodb':
+            try:
+                logging.info(f"Deleting {request['widgetId']} from {self.args['storageName']}")
+                self.s3.delete_object(
+                    Bucket=self.args['storageName'],
+                    Key=request['widgetId']
+                )
+
+            except:
+                logging.error(f"Failed to delete widget {request['widgetId']}.")
+
         try:
             # retrieve widget currently in bucket
             response = self.s3.get_object(Bucket="cs-5260-wizard-web", Key=f"widgets/{request['owner']}/{request['widgetId']}")
