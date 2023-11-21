@@ -160,6 +160,7 @@ class Consumer():
                     logging.info(f"Successfully updated {request['widgetId']} in {self.args['storageName']}")
                 except Exception as e:
                     logging.error(f"Failed to update widget {request['widgetId']}")
+                    print(e)
             else:
                 logging.warning(f"Widget {request['widgetId']} with owner {request['owner']} does not exist")
             
@@ -172,26 +173,24 @@ class Consumer():
                     Bucket=self.args['storageName'],
                     Key=request['widgetId']
                 )
-                
-            except:
+                logging.info(f"Successfully deleted {request['widgetId']}.")
+
+            except Exception as e:
                 logging.error(f"Failed to delete widget {request['widgetId']}.")
+                print(e)
+
         elif self.args['storageType'] == 'dynamodb':
             try:
                 logging.info(f"Deleting {request['widgetId']} from {self.args['storageName']}")
-                self.s3.delete_object(
-                    Bucket=self.args['storageName'],
-                    Key=request['widgetId']
+                self.db.delete_item(
+                    TableName=self.args['storageName'],
+                    Key={'id': {'S': request['widgetId']}}
                 )
+                logging.info(f"Successfully deleted {request['widgetId']}.")
 
-            except:
+            except Exception as e:
                 logging.error(f"Failed to delete widget {request['widgetId']}.")
-
-        try:
-            # retrieve widget currently in bucket
-            response = self.s3.get_object(Bucket="cs-5260-wizard-web", Key=f"widgets/{request['owner']}/{request['widgetId']}")
-            
-        except:
-            logging.warning(f"Widget {request['widgetId']} does not exist")
+                print(e)
 
     def retrieveRequest(self):
         logging.info(f"Retrieving a request from {self.args['queueName']}")
