@@ -40,8 +40,9 @@ class Consumer():
                     Item=newWidget
                 )
                 logging.info(f"Successfully stored widget {newWidget['id']} in {self.args['storageName']}")
-            except:
+            except Exception as e:
                 logging.error(f"Could not store widget {newWidget['id']} in {self.args['storageName']}")
+                print(e)
 
         elif self.args["storageType"] == "s3":
             newWidget = {key: val for key, val in request.items() if key != 'requestId' and key != 'type'}
@@ -171,7 +172,7 @@ class Consumer():
                 logging.info(f"Deleting {request['widgetId']} from {self.args['storageName']}")
                 self.s3.delete_object(
                     Bucket=self.args['storageName'],
-                    Key=request['widgetId']
+                    Key=f"widgets/{request['owner'].lower().replace(' ', '-')}/{request['widgetId']}"
                 )
                 logging.info(f"Successfully deleted {request['widgetId']}.")
 
