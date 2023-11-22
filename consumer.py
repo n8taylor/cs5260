@@ -306,6 +306,7 @@ class Consumer():
                         # break
                         self.requests = []
                 except Exception as e:
+                    print(e)
                     logging.error(f"Could not access requests from {self.args['queueName']}")
                     break
 

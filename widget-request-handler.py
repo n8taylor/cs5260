@@ -10,14 +10,15 @@ queueUrl = response['QueueUrl']
 def lambda_handler(event, context):
     try:
         # Parse input data from API Gateway
+        print(event)
         data = json.loads(event['body'])
         print(data)
 
         # Add data to SQS queue
-        # response = sqs.send_message(
-        #     QueueUrl=queueUrl,
-        #     MessageBody=json.dumps(data)
-        # )
+        response = sqs.send_message(
+            QueueUrl=queueUrl,
+            MessageBody=json.dumps(data)
+        )
 
         # Return success response to API Gateway
         return {
@@ -25,6 +26,7 @@ def lambda_handler(event, context):
             'body': json.dumps({'status': 'success', 'message': 'Request added to SQS successfully'}),
         }
     except Exception as e:
+        print(e)
         # Return failure response to API Gateway
         return {
             'statusCode': 500,
