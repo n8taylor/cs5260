@@ -287,7 +287,9 @@ class Consumer():
                         timeout = 6
 
                         for i in range(len(self.requests)):
+                            print(self.requests[i])
                             request = json.loads(self.requests[i]['Body'])
+                            print(request)
                             logging.info(f"Request {request['requestId']} found: {request['type']} {request['widgetId']}")
 
                             # perform requested method on specified widget
