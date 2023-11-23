@@ -1,18 +1,1 @@
-{
-    "body": "{\"type\":\"create\",\"requestId\":\"c4b8b5d4-1cd4-4da9-9c85-612d2df7c87d\",\"widgetId\":\"b1a45d8e-567b-40c3-96b8-fbb46f3b1ed5\",\"owner\":\"Mary Matthews\",\"label\":\"IVIEB\",\"description\":\"GJHGBYNDREXIRNRUQJCZ\",\"otherAttributes\":[{\"name\":\"color\",\"value\":\"green\"},{\"name\":\"height\",\"value\":\"743\"},{\"name\":\"length-unit\",\"value\":\"cm\"},{\"name\":\"rating\",\"value\":\"1.738061\"}]}",
-    "resource": "/{proxy+}",
-    "path": "/path/to/resource",
-    "httpMethod": "POST",
-    "isBase64Encoded": false,
-    "queryStringParameters": null,
-    "headers": {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer your-token"
-    },
-    "pathParameters": {
-      "proxy": "path/to/resource"
-    },
-    "stageVariables": {
-      "stageVarName": "stageVarValue"
-    }
-  }
+"{\"type\":\"create\",\"requestId\":\"c4b8b5d4-1cd4-4da9-9c85-612d2df7c87d\",\"widgetId\":\"b1a45d8e-567b-40c3-96b8-fbb46f3b1ed5\",\"owner\":\"Mary Matthews\",\"label\":\"IVIEB\",\"description\":\"GJHGBYNDREXIRNRUQJCZ\",\"otherAttributes\":[{\"name\":\"color\",\"value\":\"green\"},{\"name\":\"height\",\"value\":\"743\"},{\"name\":\"length-unit\",\"value\":\"cm\"},{\"name\":\"rating\",\"value\":\"1.738061\"}]}"

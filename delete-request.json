@@ -1,18 +1,1 @@
-{
-    "body": "{\"type\":\"delete\",\"requestId\":\"0ead878f-b8f4-41a4-8f0a-54b13f36ccfb\",\"widgetId\":\"b1a45d8e-567b-40c3-96b8-fbb46f3b1ed5\",\"owner\":\"Mary Matthews\"}",
-    "resource": "/{proxy+}",
-    "path": "/path/to/resource",
-    "httpMethod": "POST",
-    "isBase64Encoded": false,
-    "queryStringParameters": null,
-    "headers": {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer your-token"
-    },
-    "pathParameters": {
-      "proxy": "path/to/resource"
-    },
-    "stageVariables": {
-      "stageVarName": "stageVarValue"
-    }
-  }
+"{\"type\":\"delete\",\"requestId\":\"0ead878f-b8f4-41a4-8f0a-54b13f36ccfb\",\"widgetId\":\"b1a45d8e-567b-40c3-96b8-fbb46f3b1ed5\",\"owner\":\"Mary Matthews\"}"

@@ -1,18 +1,1 @@
-{
-    "body": "{\"type\":\"update\",\"requestId\":\"75131e71-d478-43c3-aec8-16e5bc1d9245\",\"widgetId\":\"b1a45d8e-567b-40c3-96b8-fbb46f3b1ed5\",\"owner\":\"Mary Matthews\",\"label\":\"IGHN\",\"description\":\"EOAAWHA\",\"otherAttributes\":[{\"name\":\"color\",\"value\":\"green\"},{\"name\":\"height\",\"value\":\"460\"},{\"name\":\"height-unit\",\"value\":\"cm\"},{\"name\":\"width\",\"value\":\"32\"},{\"name\":\"width-unit\",\"value\":\"cm\"},{\"name\":\"length-unit\",\"value\":\"cm\"},{\"name\":\"rating\",\"value\":\"4.912376\"},{\"name\":\"price\",\"value\":\"43.38\"}]}",
-    "resource": "/{proxy+}",
-    "path": "/path/to/resource",
-    "httpMethod": "POST",
-    "isBase64Encoded": false,
-    "queryStringParameters": null,
-    "headers": {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer your-token"
-    },
-    "pathParameters": {
-      "proxy": "path/to/resource"
-    },
-    "stageVariables": {
-      "stageVarName": "stageVarValue"
-    }
-  }
+"{\"type\":\"update\",\"requestId\":\"75131e71-d478-43c3-aec8-16e5bc1d9245\",\"widgetId\":\"b1a45d8e-567b-40c3-96b8-fbb46f3b1ed5\",\"owner\":\"Mary Matthews\",\"label\":\"IGHN\",\"description\":\"EOAAWHA\",\"otherAttributes\":[{\"name\":\"color\",\"value\":\"green\"},{\"name\":\"height\",\"value\":\"460\"},{\"name\":\"height-unit\",\"value\":\"cm\"},{\"name\":\"width\",\"value\":\"32\"},{\"name\":\"width-unit\",\"value\":\"cm\"},{\"name\":\"length-unit\",\"value\":\"cm\"},{\"name\":\"rating\",\"value\":\"4.912376\"},{\"name\":\"price\",\"value\":\"43.38\"}]}"
